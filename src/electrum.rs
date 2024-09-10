@@ -9,10 +9,13 @@ use rayon::prelude::*;
 use serde_derive::Deserialize;
 use serde_json::{self, json, Value};
 
-use std::collections::{hash_map::Entry, HashMap};
 use std::fmt;
 use std::iter::FromIterator;
 use std::str::FromStr;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    fmt::Debug,
+};
 
 use crate::{
     cache::Cache,
@@ -167,6 +170,7 @@ impl Rpc {
     }
 
     pub fn update_client(&self, client: &mut Client) -> Result<Vec<String>> {
+        warn!("Rpc.update_client()");
         let chain = self.tracker.chain();
         let mut notifications = client
             .scripthashes
@@ -190,6 +194,7 @@ impl Rpc {
         if let Some(old_tip) = client.tip {
             let new_tip = self.tracker.chain().tip();
             if old_tip != new_tip {
+                warn!("    update tip to {}", new_tip);
                 client.tip = Some(new_tip);
                 let height = chain.height();
                 let header = chain.get_block_header(height).unwrap();
@@ -203,8 +208,11 @@ impl Rpc {
     }
 
     fn headers_subscribe(&self, client: &mut Client) -> Result<Value> {
+        warn!("Rpc.header_subscribe()");
         let chain = self.tracker.chain();
         client.tip = Some(chain.tip());
+        warn!("    tip: {:?}", client.tip);
+
         let height = chain.height();
         let header = chain.get_block_header(height).unwrap();
         Ok(json!({"hex": serialize_hex(header), "height": height}))
@@ -461,6 +469,7 @@ impl Rpc {
     }
 
     pub fn handle_requests(&self, client: &mut Client, lines: &[String]) -> Vec<String> {
+        warn!("Rpc.handle_requests({:#?})", lines);
         lines
             .iter()
             .map(|line| {
@@ -473,6 +482,7 @@ impl Rpc {
     }
 
     fn handle_calls(&self, client: &mut Client, calls: Result<Calls, Value>) -> Value {
+        warn!("Rpc.handle_calls()");
         let calls: Calls = match calls {
             Ok(calls) => calls,
             Err(response) => return response, // JSON parsing failed - the response does not contain request id
@@ -524,6 +534,7 @@ impl Rpc {
     }
 
     fn single_call(&self, client: &mut Client, call: Result<Call, Value>) -> Value {
+        warn!("Rpc.single_call({:?})", call);
         let call = match call {
             Ok(call) => call,
             Err(response) => return response, // params parsing may fail - the response contains request id
@@ -630,6 +641,15 @@ struct Call {
     id: Value,
     method: String,
     params: Params,
+}
+
+impl Debug for Call {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Call")
+            .field("id", &self.id)
+            .field("method", &self.method)
+            .finish()
+    }
 }
 
 impl Call {

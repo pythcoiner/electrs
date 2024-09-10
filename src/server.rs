@@ -4,6 +4,7 @@ use rayon::prelude::*;
 
 use std::{
     collections::hash_map::HashMap,
+    fmt::Debug,
     io::{BufRead, BufReader, Write},
     iter::once,
     net::{Shutdown, TcpListener, TcpStream},
@@ -21,6 +22,12 @@ struct Peer {
     id: usize,
     client: Client,
     stream: TcpStream,
+}
+
+impl Debug for Peer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Peer").field("id", &self.id).finish()
+    }
 }
 
 impl Peer {
@@ -117,6 +124,7 @@ fn serve() -> Result<()> {
                 },
                 // Handle Electrum RPC requests
                 recv(server_rx) -> event => {
+                    warn!("Handle Electrum RPC Request...");
                     let first = once(event.context("server disconnected")?);
                     let rest = server_rx.iter().take(server_rx.len());
                     let events: Vec<Event> = first.chain(rest).collect();
@@ -145,9 +153,11 @@ fn notify_peers(rpc: &Rpc, peers: HashMap<usize, Peer>) -> HashMap<usize, Peer> 
 }
 
 fn notify_peer(rpc: &Rpc, peer: &mut Peer) -> Result<()> {
+    warn!("notify_peer({:?})", peer);
     let notifications = rpc
         .update_client(&mut peer.client)
         .context("failed to generate notifications")?;
+    warn!("{:#?}", notifications);
     peer.send(notifications)
         .context("failed to send notifications")
 }
@@ -164,6 +174,7 @@ enum Message {
 }
 
 fn handle_events(rpc: &Rpc, peers: &mut HashMap<usize, Peer>, events: Vec<Event>) {
+    warn!("handle_events()");
     let mut events_by_peer = HashMap::<usize, Vec<Message>>::new();
     events
         .into_iter()
@@ -179,6 +190,7 @@ fn handle_peer_events(
     peer_id: usize,
     messages: Vec<Message>,
 ) {
+    warn!("handle_peer_events({})", peer_id);
     let mut lines = vec![];
     let mut done = false;
     for msg in messages {
